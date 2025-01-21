@@ -1,6 +1,7 @@
 .voice-input {
     margin: 1rem 0;
     text-align: center;
+    touch-action: manipulation;
 }
 
 .voice-button {
@@ -17,11 +18,30 @@
     cursor: pointer;
     transition: all 0.3s ease;
     margin: 0 auto;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+/* Mobile-specific styles */
+.voice-button.mobile {
+    padding: 1rem 2rem; /* Larger touch target */
+    min-height: 3.5rem;
+    font-size: 1.1rem;
 }
 
 .voice-button:hover:not(:disabled) {
     background: #3367d6;
     transform: translateY(-1px);
+}
+
+@media (hover: none) {
+    .voice-button:hover:not(:disabled) {
+        transform: none; /* Disable hover effect on touch devices */
+    }
+}
+
+.voice-button:active {
+    transform: translateY(1px);
 }
 
 .voice-button:disabled {
@@ -40,15 +60,20 @@
 
 .voice-error {
     color: #dc3545;
-    margin-top: 0.5rem;
+    margin: 0.75rem auto;
     font-size: 0.9rem;
+    max-width: 280px;
+    padding: 0 1rem;
 }
 
 .listening-indicator {
-    margin-top: 0.5rem;
-    color: #666;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
     font-size: 0.9rem;
-    animation: fadeInOut 2s infinite;
+    color: #666;
 }
 
 .recording-pulse {
@@ -56,17 +81,21 @@
     height: 12px;
     border-radius: 50%;
     background: #dc3545;
-    margin: 10px auto;
     animation: pulse 1.5s infinite;
 }
 
-.voice-status {
-    height: 32px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+.interim-transcript {
+    margin: 1rem auto;
+    padding: 0.5rem;
+    color: #666;
+    font-style: italic;
+    min-height: 20px;
+    opacity: 0.7;
+    max-width: 90%;
+    word-wrap: break-word;
 }
 
+/* Improved pulse animation for better performance */
 @keyframes pulse {
     0% {
         transform: scale(0.95);
@@ -84,11 +113,14 @@
     }
 }
 
-@keyframes fadeInOut {
-    0%, 100% {
-        opacity: 0.5;
+/* Media queries for different screen sizes */
+@media (max-width: 480px) {
+    .voice-button {
+        width: 90%;
+        max-width: 300px;
     }
-    50% {
-        opacity: 1;
+
+    .interim-transcript {
+        font-size: 0.9rem;
     }
 } 
