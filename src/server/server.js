@@ -91,16 +91,8 @@ app.post('/api/process-events', async (req, res) => {
             });
         }
 
-        const createdEvents = await Promise.all(
-            events.map(event => 
-                calendar.events.insert({
-                    calendarId: 'primary',
-                    resource: event
-                })
-            )
-        );
-
-        res.json({ success: true, events: createdEvents });
+        // Return the events without creating them
+        res.json({ success: true, events: events });
     } catch (error) {
         console.error('Error processing events:', error);
         if (error.message.includes('No access')) {

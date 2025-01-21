@@ -25,10 +25,31 @@ function EventConfirmationModal({ events, onConfirm, onCancel }) {
     const handleEventChange = (index, field, value) => {
         setEditedEvents(prev => {
             const newEvents = [...prev];
-            newEvents[index] = {
-                ...newEvents[index],
-                [field]: value
-            };
+            if (field === 'start') {
+                // Convert the input datetime-local value to local timezone
+                const localDate = new Date(value);
+                
+                // Create end date 1 hour later
+                const endDate = new Date(localDate);
+                endDate.setHours(endDate.getHours() + 1);
+
+                newEvents[index] = {
+                    ...newEvents[index],
+                    start: {
+                        dateTime: localDate.toISOString().slice(0, -1),
+                        timeZone: newEvents[index].start.timeZone
+                    },
+                    end: {
+                        dateTime: endDate.toISOString().slice(0, -1),
+                        timeZone: newEvents[index].end.timeZone
+                    }
+                };
+            } else if (field === 'summary' || field === 'description') {
+                newEvents[index] = {
+                    ...newEvents[index],
+                    [field]: value
+                };
+            }
             return newEvents;
         });
     };
@@ -40,16 +61,41 @@ function EventConfirmationModal({ events, onConfirm, onCancel }) {
         onConfirm(confirmedEvents);
     };
 
-    const formatDate = (date) => {
-        return new Date(date).toLocaleString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: 'numeric',
-            hour12: true
-        });
+    const formatDate = (dateStr) => {
+        try {
+            const date = new Date(dateStr);
+            return date.toLocaleString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: 'numeric',
+                hour12: true
+            });
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return 'Invalid date';
+        }
+    };
+
+    const formatDateForInput = (dateTimeStr) => {
+        try {
+            // Convert the date string to local date
+            const date = new Date(dateTimeStr);
+            // Format as YYYY-MM-DDTHH:mm
+            return date.toLocaleString('sv', { // 'sv' locale gives us ISO format
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            }).replace(' ', 'T');
+        } catch (error) {
+            console.error('Error formatting date for input:', error);
+            return '';
+        }
     };
 
     return (
@@ -88,20 +134,17 @@ function EventConfirmationModal({ events, onConfirm, onCancel }) {
                                 <div className="event-edit-form">
                                     <input
                                         type="text"
-                                        value={event.summary}
+                                        value={event.summary || ''}
                                         onChange={(e) => handleEventChange(index, 'summary', e.target.value)}
                                         placeholder="Event Title"
                                     />
                                     <input
                                         type="datetime-local"
-                                        value={new Date(event.start.dateTime).toISOString().slice(0, 16)}
-                                        onChange={(e) => handleEventChange(index, 'start', {
-                                            ...event.start,
-                                            dateTime: new Date(e.target.value).toISOString()
-                                        })}
+                                        value={event.start?.dateTime ? formatDateForInput(event.start.dateTime) : ''}
+                                        onChange={(e) => handleEventChange(index, 'start', e.target.value)}
                                     />
                                     <textarea
-                                        value={event.description}
+                                        value={event.description || ''}
                                         onChange={(e) => handleEventChange(index, 'description', e.target.value)}
                                         placeholder="Description"
                                     />
@@ -110,7 +153,7 @@ function EventConfirmationModal({ events, onConfirm, onCancel }) {
                                 <div className="event-details">
                                     <h3>{event.summary}</h3>
                                     <p className="event-time">
-                                        {formatDate(event.start.dateTime)}
+                                        {event.start?.dateTime ? formatDate(event.start.dateTime) : 'Time not set'}
                                     </p>
                                     {event.description && (
                                         <p className="event-description">{event.description}</p>

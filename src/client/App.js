@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from './config';
 import EventConfirmationModal from './components/EventConfirmationModal';
+import VoiceInput from './components/VoiceInput';
 import './styles.css';
 
 function App() {
@@ -69,6 +70,10 @@ function App() {
         }
     };
 
+    const handleVoiceTranscript = (transcript) => {
+        setText(prev => prev + (prev ? '\n' : '') + transcript);
+    };
+
     return (
         <div className="app">
             <div className="container">
@@ -89,8 +94,12 @@ function App() {
                 ) : (
                     <div className="input-section">
                         <p className="description">
-                            Paste your text below. We'll automatically extract events and add them to your calendar.
+                            Type or speak to add events to your calendar. We'll automatically extract and organize them for you.
                         </p>
+                        <VoiceInput 
+                            onTranscript={handleVoiceTranscript}
+                            disabled={!isAuthenticated}
+                        />
                         <form onSubmit={handleSubmit}>
                             <textarea
                                 value={text}

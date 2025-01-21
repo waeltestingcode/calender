@@ -257,20 +257,31 @@ function parseDateTimeString(dateStr, timeStr, timezone) {
 function createCalendarEvent(event, timezone) {
     const eventDate = event.date;
     
-    // Create dates in the user's timezone
-    const startDate = utcToZonedTime(eventDate, timezone);
+    // Create dates directly in the user's timezone without UTC conversion
+    const startDate = new Date(eventDate);
     const endDate = new Date(startDate);
     endDate.setHours(endDate.getHours() + (event.type === 'deadline' ? 0 : 1));
+
+    // Format the dates as ISO strings but preserve the timezone
+    const formatToISO = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        
+        return `${year}-${month}-${day}T${hours}:${minutes}:00`;
+    };
 
     return {
         summary: event.type === 'deadline' ? `⚠️ DUE: ${event.title}` : `🗓️ ${event.title}`,
         description: event.details || '',
         start: {
-            dateTime: zonedTimeToUtc(startDate, timezone).toISOString(),
+            dateTime: formatToISO(startDate),
             timeZone: timezone
         },
         end: {
-            dateTime: zonedTimeToUtc(endDate, timezone).toISOString(),
+            dateTime: formatToISO(endDate),
             timeZone: timezone
         }
     };
