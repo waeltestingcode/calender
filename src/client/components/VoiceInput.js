@@ -5,6 +5,7 @@ function VoiceInput({ onTranscript, disabled }) {
     const [isListening, setIsListening] = useState(false);
     const [error, setError] = useState(null);
     const recognitionRef = useRef(null);
+    const transcriptRef = useRef('');  // Use ref to ensure we have latest value
     const [currentTranscript, setCurrentTranscript] = useState('');
     const [isMobile] = useState(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
 
@@ -22,11 +23,17 @@ function VoiceInput({ onTranscript, disabled }) {
 
     const stopRecognition = useCallback(() => {
         if (recognitionRef.current) {
+            // Process final transcript before stopping
+            if (transcriptRef.current.trim()) {
+                onTranscript(transcriptRef.current.trim());
+            }
             recognitionRef.current.stop();
             recognitionRef.current = null;
         }
         setIsListening(false);
-    }, []);
+        setCurrentTranscript('');
+        transcriptRef.current = '';
+    }, [onTranscript]);
 
     const startListening = useCallback(async () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -50,6 +57,7 @@ function VoiceInput({ onTranscript, disabled }) {
                 setIsListening(true);
                 setError(null);
                 setCurrentTranscript('');
+                transcriptRef.current = '';
             };
 
             recognition.onerror = (event) => {
@@ -67,10 +75,6 @@ function VoiceInput({ onTranscript, disabled }) {
             };
 
             recognition.onend = () => {
-                if (currentTranscript.trim()) {
-                    // Only send non-empty transcripts
-                    onTranscript(currentTranscript.trim());
-                }
                 stopRecognition();
             };
 
@@ -80,6 +84,7 @@ function VoiceInput({ onTranscript, disabled }) {
                     .join(' ');
                 
                 setCurrentTranscript(transcript);
+                transcriptRef.current = transcript; // Keep latest transcript in ref
             };
 
             recognitionRef.current = recognition;
@@ -88,7 +93,7 @@ function VoiceInput({ onTranscript, disabled }) {
             console.error('Error initializing speech recognition:', err);
             setError('Failed to start voice recognition. Please try again.');
         }
-    }, [onTranscript, stopRecognition, isMobile]);
+    }, [stopRecognition, isMobile]);
 
     const handleToggle = useCallback(async (e) => {
         e.preventDefault();
