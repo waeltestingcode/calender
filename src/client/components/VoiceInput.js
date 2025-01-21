@@ -5,14 +5,13 @@ function VoiceInput({ onTranscript, disabled }) {
     const [isListening, setIsListening] = useState(false);
     const [error, setError] = useState(null);
     const recognitionRef = useRef(null);
-    const [finalTranscript, setFinalTranscript] = useState('');
-    const [interimTranscript, setInterimTranscript] = useState('');
+    const [currentTranscript, setCurrentTranscript] = useState('');
     const [isMobile] = useState(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
 
     const requestMicrophonePermission = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            stream.getTracks().forEach(track => track.stop()); // Stop the stream immediately
+            stream.getTracks().forEach(track => track.stop());
             return true;
         } catch (err) {
             console.error('Microphone permission denied:', err);
@@ -27,35 +26,30 @@ function VoiceInput({ onTranscript, disabled }) {
             recognitionRef.current = null;
         }
         setIsListening(false);
-        setInterimTranscript('');
     }, []);
 
     const startListening = useCallback(async () => {
-        // Check for browser support
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             setError("Voice recognition is not supported in your browser. Please use Chrome or Safari.");
             return;
         }
 
-        // Request microphone permission first
         const hasPermission = await requestMicrophonePermission();
         if (!hasPermission) return;
 
         try {
             const recognition = new SpeechRecognition();
 
-            // Mobile-optimized configuration
-            recognition.continuous = !isMobile; // Set to false on mobile for better performance
+            recognition.continuous = !isMobile;
             recognition.interimResults = true;
-            recognition.maxAlternatives = 3;
+            recognition.maxAlternatives = 1;
             recognition.lang = 'en-US';
 
             recognition.onstart = () => {
                 setIsListening(true);
                 setError(null);
-                setFinalTranscript('');
-                setInterimTranscript('');
+                setCurrentTranscript('');
             };
 
             recognition.onerror = (event) => {
@@ -73,36 +67,19 @@ function VoiceInput({ onTranscript, disabled }) {
             };
 
             recognition.onend = () => {
-                const finalText = finalTranscript || interimTranscript;
-                if (finalText.trim()) {
-                    onTranscript(finalText);
+                if (currentTranscript.trim()) {
+                    // Only send non-empty transcripts
+                    onTranscript(currentTranscript.trim());
                 }
-                
-                if (isMobile) {
-                    stopRecognition();
-                } else if (isListening) {
-                    // Only restart on desktop if still listening
-                    recognition.start();
-                }
+                stopRecognition();
             };
 
             recognition.onresult = (event) => {
-                let interim = '';
-                let final = '';
-
-                for (let i = 0; i < event.results.length; i++) {
-                    const result = event.results[i];
-                    if (result.isFinal) {
-                        final += result[0].transcript;
-                    } else {
-                        interim += result[0].transcript;
-                    }
-                }
-
-                setInterimTranscript(interim);
-                if (final) {
-                    setFinalTranscript(prev => prev + ' ' + final);
-                }
+                const transcript = Array.from(event.results)
+                    .map(result => result[0].transcript)
+                    .join(' ');
+                
+                setCurrentTranscript(transcript);
             };
 
             recognitionRef.current = recognition;
@@ -111,10 +88,10 @@ function VoiceInput({ onTranscript, disabled }) {
             console.error('Error initializing speech recognition:', err);
             setError('Failed to start voice recognition. Please try again.');
         }
-    }, [onTranscript, stopRecognition, isListening, isMobile]);
+    }, [onTranscript, stopRecognition, isMobile]);
 
     const handleToggle = useCallback(async (e) => {
-        e.preventDefault(); // Prevent double-tap zoom on mobile
+        e.preventDefault();
         
         if (isListening) {
             stopRecognition();
@@ -123,7 +100,6 @@ function VoiceInput({ onTranscript, disabled }) {
         }
     }, [isListening, startListening, stopRecognition]);
 
-    // Cleanup on unmount
     useEffect(() => {
         return () => {
             if (recognitionRef.current) {
@@ -137,7 +113,7 @@ function VoiceInput({ onTranscript, disabled }) {
             <button 
                 className={`voice-button ${isListening ? 'listening' : ''} ${isMobile ? 'mobile' : ''}`}
                 onClick={handleToggle}
-                onTouchStart={(e) => e.preventDefault()} // Prevent ghost clicks
+                onTouchStart={(e) => e.preventDefault()}
                 disabled={disabled}
                 title={disabled ? "Please connect to Google Calendar first" : "Tap to start/stop voice input"}
             >
@@ -153,9 +129,9 @@ function VoiceInput({ onTranscript, disabled }) {
                     <div className="recording-pulse"></div>
                 </div>
             )}
-            {interimTranscript && (
+            {currentTranscript && (
                 <div className="interim-transcript">
-                    {interimTranscript}
+                    {currentTranscript}
                 </div>
             )}
         </div>
