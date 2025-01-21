@@ -4,6 +4,7 @@ import './VoiceInput.css';
 function VoiceInput({ onTranscript, disabled }) {
     const [isListening, setIsListening] = useState(false);
     const [error, setError] = useState(null);
+    const [transcript, setTranscript] = useState('');
 
     const startListening = () => {
         if (!window.webkitSpeechRecognition && !window.SpeechRecognition) {
@@ -15,12 +16,13 @@ function VoiceInput({ onTranscript, disabled }) {
         const recognition = new SpeechRecognition();
         
         recognition.continuous = true;
-        recognition.interimResults = true;
+        recognition.interimResults = false;
         recognition.lang = 'en-US';
 
         recognition.onstart = () => {
             setIsListening(true);
             setError(null);
+            setTranscript('');
         };
 
         recognition.onerror = (event) => {
@@ -30,18 +32,19 @@ function VoiceInput({ onTranscript, disabled }) {
 
         recognition.onend = () => {
             setIsListening(false);
+            if (transcript) {
+                onTranscript(transcript);
+            }
         };
 
         recognition.onresult = (event) => {
-            const transcript = Array.from(event.results)
+            const finalTranscript = Array.from(event.results)
                 .map(result => result[0].transcript)
                 .join(' ');
-            
-            onTranscript(transcript);
+            setTranscript(finalTranscript);
         };
 
         recognition.start();
-
         return recognition;
     };
 
@@ -69,7 +72,7 @@ function VoiceInput({ onTranscript, disabled }) {
             {error && <div className="voice-error">{error}</div>}
             {isListening && (
                 <div className="listening-indicator">
-                    Listening... Speak clearly into your microphone
+                    Recording... Click stop when you're done speaking
                 </div>
             )}
         </div>
