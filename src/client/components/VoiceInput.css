@@ -51,15 +51,36 @@
     animation: fadeInOut 2s infinite;
 }
 
+.recording-pulse {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #dc3545;
+    margin: 10px auto;
+    animation: pulse 1.5s infinite;
+}
+
+.voice-status {
+    height: 32px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
 @keyframes pulse {
     0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+    }
+    
+    70% {
         transform: scale(1);
+        box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
     }
-    50% {
-        transform: scale(1.05);
-    }
+    
     100% {
-        transform: scale(1);
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
     }
 }
 
