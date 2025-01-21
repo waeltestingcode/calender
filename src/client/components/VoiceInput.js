@@ -1,66 +1,91 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import './VoiceInput.css';
 
 function VoiceInput({ onTranscript, disabled }) {
     const [isListening, setIsListening] = useState(false);
     const [error, setError] = useState(null);
-    const [transcript, setTranscript] = useState('');
+    const [recognition, setRecognition] = useState(null);
+    const [finalTranscript, setFinalTranscript] = useState('');
 
-    const startListening = () => {
+    const stopRecognition = useCallback(() => {
+        if (recognition) {
+            recognition.stop();
+            setRecognition(null);
+        }
+        setIsListening(false);
+    }, [recognition]);
+
+    const startListening = useCallback(() => {
         if (!window.webkitSpeechRecognition && !window.SpeechRecognition) {
             setError("Voice recognition is not supported in your browser. Please use Chrome.");
             return;
         }
 
-        const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
-        const recognition = new SpeechRecognition();
-        
-        recognition.continuous = true;
-        recognition.interimResults = false;
-        recognition.lang = 'en-US';
+        try {
+            const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+            const newRecognition = new SpeechRecognition();
 
-        recognition.onstart = () => {
-            setIsListening(true);
-            setError(null);
-            setTranscript('');
-        };
+            newRecognition.continuous = false; // Changed to false for better reliability
+            newRecognition.interimResults = false;
+            newRecognition.maxAlternatives = 1;
+            newRecognition.lang = 'en-US';
 
-        recognition.onerror = (event) => {
-            setError(`Error: ${event.error}`);
-            setIsListening(false);
-        };
+            newRecognition.onstart = () => {
+                setIsListening(true);
+                setError(null);
+                setFinalTranscript('');
+            };
 
-        recognition.onend = () => {
-            setIsListening(false);
-            if (transcript) {
-                onTranscript(transcript);
+            newRecognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                setError(`Error: ${event.error}`);
+                stopRecognition();
+            };
+
+            newRecognition.onend = () => {
+                if (finalTranscript) {
+                    onTranscript(finalTranscript);
+                }
+                stopRecognition();
+            };
+
+            newRecognition.onresult = (event) => {
+                const transcript = Array.from(event.results)
+                    .map(result => result[0].transcript)
+                    .join(' ');
+                setFinalTranscript(transcript);
+            };
+
+            setRecognition(newRecognition);
+            newRecognition.start();
+        } catch (err) {
+            console.error('Error initializing speech recognition:', err);
+            setError('Failed to start voice recognition. Please try again.');
+        }
+    }, [onTranscript, finalTranscript, stopRecognition]);
+
+    const handleToggle = useCallback(() => {
+        if (isListening) {
+            stopRecognition();
+        } else {
+            startListening();
+        }
+    }, [isListening, startListening, stopRecognition]);
+
+    // Cleanup on unmount
+    React.useEffect(() => {
+        return () => {
+            if (recognition) {
+                recognition.stop();
             }
         };
-
-        recognition.onresult = (event) => {
-            const finalTranscript = Array.from(event.results)
-                .map(result => result[0].transcript)
-                .join(' ');
-            setTranscript(finalTranscript);
-        };
-
-        recognition.start();
-        return recognition;
-    };
-
-    const toggleListening = () => {
-        if (isListening) {
-            window.recognition?.stop();
-        } else {
-            window.recognition = startListening();
-        }
-    };
+    }, [recognition]);
 
     return (
         <div className="voice-input">
             <button 
                 className={`voice-button ${isListening ? 'listening' : ''}`}
-                onClick={toggleListening}
+                onClick={handleToggle}
                 disabled={disabled}
                 title={disabled ? "Please connect to Google Calendar first" : "Click to start/stop voice input"}
             >
@@ -75,6 +100,11 @@ function VoiceInput({ onTranscript, disabled }) {
                     Recording... Click stop when you're done speaking
                 </div>
             )}
+            <div className="voice-status">
+                {isListening && (
+                    <div className="recording-pulse"></div>
+                )}
+            </div>
         </div>
     );
 }
