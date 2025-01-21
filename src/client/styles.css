@@ -151,4 +151,31 @@ textarea:focus {
 
 .auth-section, .input-section {
     animation: fadeIn 0.5s ease;
+}
+
+.input-mode-toggle {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.mode-button {
+    padding: 0.5rem 1rem;
+    border: 2px solid #4285f4;
+    border-radius: 20px;
+    background: white;
+    color: #4285f4;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.mode-button:hover {
+    background: #f8f9fa;
+}
+
+.mode-button.active {
+    background: #4285f4;
+    color: white;
 } 
