@@ -11,6 +11,7 @@ function App() {
     const [message, setMessage] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [extractedEvents, setExtractedEvents] = useState(null);
+    const [isVoiceMode, setIsVoiceMode] = useState(false);
 
     useEffect(() => {
         // Check if user is authenticated
@@ -70,8 +71,25 @@ function App() {
         }
     };
 
-    const handleVoiceTranscript = (transcript) => {
-        setText(prev => prev + (prev ? '\n' : '') + transcript);
+    const handleVoiceTranscript = async (transcript) => {
+        setLoading(true);
+        try {
+            const response = await axios.post(`${API_BASE_URL}/api/process-events`, { text: transcript });
+            setExtractedEvents(response.data.events);
+        } catch (error) {
+            const errorMessage = error.response?.data?.error || 'Error processing events. Please try again.';
+            setMessage(`Error: ${errorMessage}`);
+            console.error('Error:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const toggleInputMode = () => {
+        setIsVoiceMode(!isVoiceMode);
+        setText('');
+        setMessage('');
+        setExtractedEvents(null);
     };
 
     return (
@@ -94,31 +112,52 @@ function App() {
                 ) : (
                     <div className="input-section">
                         <p className="description">
-                            Type or speak to add events to your calendar. We'll automatically extract and organize them for you.
+                            {isVoiceMode 
+                                ? "Speak clearly to add events to your calendar." 
+                                : "Type to add events to your calendar."}
                         </p>
-                        <VoiceInput 
-                            onTranscript={handleVoiceTranscript}
-                            disabled={!isAuthenticated}
-                        />
-                        <form onSubmit={handleSubmit}>
-                            <textarea
-                                value={text}
-                                onChange={(e) => setText(e.target.value)}
-                                placeholder="Example: Team meeting tomorrow at 3pm, then dinner at 8pm"
-                                rows={8}
-                            />
+                        
+                        <div className="input-mode-toggle">
                             <button 
-                                type="submit" 
-                                disabled={loading || !text.trim()}
-                                className="submit-button"
+                                className={`mode-button ${!isVoiceMode ? 'active' : ''}`}
+                                onClick={() => !isVoiceMode || toggleInputMode()}
                             >
-                                {loading ? (
-                                    <span className="loading-spinner"></span>
-                                ) : (
-                                    'Extract Events'
-                                )}
+                                ⌨️ Text Input
                             </button>
-                        </form>
+                            <button 
+                                className={`mode-button ${isVoiceMode ? 'active' : ''}`}
+                                onClick={() => isVoiceMode || toggleInputMode()}
+                            >
+                                🎤 Voice Input
+                            </button>
+                        </div>
+
+                        {isVoiceMode ? (
+                            <VoiceInput 
+                                onTranscript={handleVoiceTranscript}
+                                disabled={!isAuthenticated || loading}
+                            />
+                        ) : (
+                            <form onSubmit={handleSubmit}>
+                                <textarea
+                                    value={text}
+                                    onChange={(e) => setText(e.target.value)}
+                                    placeholder="Example: Team meeting tomorrow at 3pm, then dinner at 8pm"
+                                    rows={8}
+                                />
+                                <button 
+                                    type="submit" 
+                                    disabled={loading || !text.trim()}
+                                    className="submit-button"
+                                >
+                                    {loading ? (
+                                        <span className="loading-spinner"></span>
+                                    ) : (
+                                        'Extract Events'
+                                    )}
+                                </button>
+                            </form>
+                        )}
                     </div>
                 )}
                 
