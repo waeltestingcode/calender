@@ -6,11 +6,16 @@ require('dotenv').config();
 const { extractEventsWithGemini } = require('./geminiExtractor');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+    origin: process.env.NODE_ENV === 'production' 
+        ? 'https://calenderautomation.vercel.app'
+        : 'http://localhost:1234',
+    credentials: true
+}));
 app.use(express.json());
 
-// Store tokens in memory (for development)
-let storedTokens = null;
+// Store tokens with user info
+const userSessions = new Map();
 
 const oauth2Client = new OAuth2Client(
     process.env.GOOGLE_CLIENT_ID,
@@ -35,11 +40,24 @@ app.get('/api/auth/google/callback', async (req, res) => {
     const { code } = req.query;
     try {
         const { tokens } = await oauth2Client.getToken(code);
-        storedTokens = tokens; // Store tokens
+        
+        // Get user info
         oauth2Client.setCredentials(tokens);
+        const oauth2 = google.oauth2('v2');
+        const userInfo = await oauth2.userinfo.get({ auth: oauth2Client });
+        const userId = userInfo.data.id;
+
+        // Store tokens with user info
+        userSessions.set(userId, {
+            tokens,
+            userInfo: userInfo.data,
+            lastAccess: new Date()
+        });
+
         const redirectUrl = process.env.NODE_ENV === 'production' 
-            ? 'https://calenderautomation.vercel.app'
-            : 'http://localhost:1234';
+            ? `https://calenderautomation.vercel.app?userId=${userId}`
+            : `http://localhost:1234?userId=${userId}`;
+        
         res.redirect(redirectUrl);
     } catch (error) {
         console.error('Error getting tokens:', error);
@@ -73,13 +91,14 @@ async function getUserTimeZone(calendar) {
 
 // Endpoint to process text and create events
 app.post('/api/process-events', async (req, res) => {
-    const { text } = req.body;
+    const { text, userId } = req.body;
     try {
-        if (!storedTokens) {
+        const userSession = userSessions.get(userId);
+        if (!userSession) {
             return res.status(401).json({ error: 'Not authenticated. Please sign in again.' });
         }
 
-        oauth2Client.setCredentials(storedTokens);
+        oauth2Client.setCredentials(userSession.tokens);
         const userTimeZone = await getUserTimeZone(calendar);
         console.log('User timezone:', userTimeZone);
         
@@ -108,12 +127,34 @@ app.post('/api/process-events', async (req, res) => {
     }
 });
 
+// Add logout endpoint
+app.post('/api/auth/logout', (req, res) => {
+    const { userId } = req.body;
+    if (userId && userSessions.has(userId)) {
+        userSessions.delete(userId);
+        res.json({ success: true });
+    } else {
+        res.status(400).json({ error: 'Invalid session' });
+    }
+});
+
 // Update auth check endpoint
-app.get('/api/auth/check', (req, res) => {
+app.post('/api/auth/check', async (req, res) => {
+    const { userId } = req.body;
     try {
-        res.json({ 
-            isAuthenticated: Boolean(storedTokens && storedTokens.access_token)
-        });
+        const userSession = userSessions.get(userId);
+        if (userSession) {
+            // Update last access time
+            userSession.lastAccess = new Date();
+            userSessions.set(userId, userSession);
+
+            res.json({ 
+                isAuthenticated: true,
+                userInfo: userSession.userInfo
+            });
+        } else {
+            res.json({ isAuthenticated: false });
+        }
     } catch (error) {
         res.json({ isAuthenticated: false });
     }
@@ -121,13 +162,14 @@ app.get('/api/auth/check', (req, res) => {
 
 // Add this new endpoint
 app.post('/api/create-events', async (req, res) => {
-    const { events } = req.body;
+    const { events, userId } = req.body;
     try {
-        if (!storedTokens) {
+        const userSession = userSessions.get(userId);
+        if (!userSession) {
             return res.status(401).json({ error: 'Not authenticated. Please sign in again.' });
         }
 
-        oauth2Client.setCredentials(storedTokens);
+        oauth2Client.setCredentials(userSession.tokens);
         
         const createdEvents = await Promise.all(
             events.map(event => 
