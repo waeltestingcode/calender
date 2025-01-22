@@ -12,7 +12,6 @@ function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [extractedEvents, setExtractedEvents] = useState(null);
     const [isVoiceMode, setIsVoiceMode] = useState(false);
-    const [userInfo, setUserInfo] = useState(null);
 
     useEffect(() => {
         // Check URL for userId parameter
@@ -40,7 +39,8 @@ function App() {
             const response = await axios.post(`${API_BASE_URL}/api/auth/check`, { userId });
             setIsAuthenticated(response.data.isAuthenticated);
             if (response.data.isAuthenticated) {
-                setUserInfo(response.data.userInfo);
+                // Store userInfo in localStorage
+                localStorage.setItem('userInfo', JSON.stringify(response.data.userInfo));
             } else {
                 localStorage.removeItem('userId');
             }
@@ -56,8 +56,8 @@ function App() {
             try {
                 await axios.post(`${API_BASE_URL}/api/auth/logout`, { userId });
                 localStorage.removeItem('userId');
+                localStorage.removeItem('userInfo');
                 setIsAuthenticated(false);
-                setUserInfo(null);
                 window.location.reload();
             } catch (error) {
                 console.error('Logout error:', error);
@@ -139,20 +139,6 @@ function App() {
         <div className="app">
             <div className="container">
                 <h1>Calendar Event Automator</h1>
-                
-                {isAuthenticated && userInfo && (
-                    <div className="user-profile">
-                        <div className="user-info">
-                            <span className="user-email">{userInfo.email}</span>
-                            <button 
-                                className="logout-button"
-                                onClick={handleLogout}
-                            >
-                                Logout
-                            </button>
-                        </div>
-                    </div>
-                )}
                 
                 {!isAuthenticated ? (
                     <div className="auth-section">
