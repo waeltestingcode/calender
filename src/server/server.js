@@ -30,7 +30,12 @@ const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 app.get('/api/auth/google', (req, res) => {
     const url = oauth2Client.generateAuthUrl({
         access_type: 'offline',
-        scope: ['https://www.googleapis.com/auth/calendar']
+        scope: [
+            'https://www.googleapis.com/auth/calendar',
+            'https://www.googleapis.com/auth/userinfo.profile',
+            'https://www.googleapis.com/auth/userinfo.email'
+        ],
+        prompt: 'consent'  // Force consent screen to ensure we get refresh token
     });
     res.json({ url });
 });
@@ -43,8 +48,8 @@ app.get('/api/auth/google/callback', async (req, res) => {
         
         // Get user info
         oauth2Client.setCredentials(tokens);
-        const oauth2 = google.oauth2('v2');
-        const userInfo = await oauth2.userinfo.get({ auth: oauth2Client });
+        const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+        const userInfo = await oauth2.userinfo.get();
         const userId = userInfo.data.id;
 
         // Store tokens with user info
@@ -60,8 +65,12 @@ app.get('/api/auth/google/callback', async (req, res) => {
         
         res.redirect(redirectUrl);
     } catch (error) {
-        console.error('Error getting tokens:', error);
-        res.status(500).json({ error: 'Failed to get tokens' });
+        console.error('Error in OAuth callback:', error);
+        const errorMessage = error.response?.data?.error || error.message;
+        const redirectUrl = process.env.NODE_ENV === 'production' 
+            ? `https://calenderautomation.vercel.app?error=${encodeURIComponent(errorMessage)}`
+            : `http://localhost:1234?error=${encodeURIComponent(errorMessage)}`;
+        res.redirect(redirectUrl);
     }
 });
 
@@ -74,10 +83,10 @@ app.get('/', (req, res) => {
 });
 
 // Add this function to get user's timezone with fallback
-async function getUserTimeZone(calendar) {
+async function getUserTimeZone(calendar, userSession) {
     try {
-        if (storedTokens) {
-            oauth2Client.setCredentials(storedTokens);
+        if (userSession && userSession.tokens) {
+            oauth2Client.setCredentials(userSession.tokens);
         }
         const settings = await calendar.settings.get({
             setting: 'timezone'
@@ -99,7 +108,7 @@ app.post('/api/process-events', async (req, res) => {
         }
 
         oauth2Client.setCredentials(userSession.tokens);
-        const userTimeZone = await getUserTimeZone(calendar);
+        const userTimeZone = await getUserTimeZone(calendar, userSession);
         console.log('User timezone:', userTimeZone);
         
         const events = await extractEventsWithGemini(text, userTimeZone);
