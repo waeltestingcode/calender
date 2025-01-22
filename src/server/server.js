@@ -47,17 +47,6 @@ app.get('/api/auth/google/callback', async (req, res) => {
     }
 });
 
-// Update auth check endpoint
-app.get('/api/auth/check', (req, res) => {
-    try {
-        res.json({ 
-            isAuthenticated: Boolean(storedTokens && storedTokens.access_token)
-        });
-    } catch (error) {
-        res.json({ isAuthenticated: false });
-    }
-});
-
 // Update the root route handler as well
 app.get('/', (req, res) => {
     const redirectUrl = process.env.NODE_ENV === 'production' 
@@ -67,10 +56,10 @@ app.get('/', (req, res) => {
 });
 
 // Add this function to get user's timezone with fallback
-async function getUserTimeZone(calendar, userSession) {
+async function getUserTimeZone(calendar) {
     try {
-        if (userSession && userSession.tokens) {
-            oauth2Client.setCredentials(userSession.tokens);
+        if (storedTokens) {
+            oauth2Client.setCredentials(storedTokens);
         }
         const settings = await calendar.settings.get({
             setting: 'timezone'
@@ -84,15 +73,14 @@ async function getUserTimeZone(calendar, userSession) {
 
 // Endpoint to process text and create events
 app.post('/api/process-events', async (req, res) => {
-    const { text, userId } = req.body;
+    const { text } = req.body;
     try {
-        const userSession = userSessions.get(userId);
-        if (!userSession) {
+        if (!storedTokens) {
             return res.status(401).json({ error: 'Not authenticated. Please sign in again.' });
         }
 
-        oauth2Client.setCredentials(userSession.tokens);
-        const userTimeZone = await getUserTimeZone(calendar, userSession);
+        oauth2Client.setCredentials(storedTokens);
+        const userTimeZone = await getUserTimeZone(calendar);
         console.log('User timezone:', userTimeZone);
         
         const events = await extractEventsWithGemini(text, userTimeZone);
@@ -120,27 +108,26 @@ app.post('/api/process-events', async (req, res) => {
     }
 });
 
-// Add logout endpoint
-app.post('/api/auth/logout', (req, res) => {
-    const { userId } = req.body;
-    if (userId && userSessions.has(userId)) {
-        userSessions.delete(userId);
-        res.json({ success: true });
-    } else {
-        res.status(400).json({ error: 'Invalid session' });
+// Update auth check endpoint
+app.get('/api/auth/check', (req, res) => {
+    try {
+        res.json({ 
+            isAuthenticated: Boolean(storedTokens && storedTokens.access_token)
+        });
+    } catch (error) {
+        res.json({ isAuthenticated: false });
     }
 });
 
 // Add this new endpoint
 app.post('/api/create-events', async (req, res) => {
-    const { events, userId } = req.body;
+    const { events } = req.body;
     try {
-        const userSession = userSessions.get(userId);
-        if (!userSession) {
+        if (!storedTokens) {
             return res.status(401).json({ error: 'Not authenticated. Please sign in again.' });
         }
 
-        oauth2Client.setCredentials(userSession.tokens);
+        oauth2Client.setCredentials(storedTokens);
         
         const createdEvents = await Promise.all(
             events.map(event => 
