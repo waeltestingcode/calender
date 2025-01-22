@@ -32,10 +32,9 @@ app.get('/api/auth/google', (req, res) => {
         access_type: 'offline',
         scope: [
             'https://www.googleapis.com/auth/calendar',
-            'https://www.googleapis.com/auth/userinfo.profile',
             'https://www.googleapis.com/auth/userinfo.email'
         ],
-        prompt: 'consent'  // Force consent screen to ensure we get refresh token
+        prompt: 'consent'
     });
     res.json({ url });
 });
@@ -46,16 +45,17 @@ app.get('/api/auth/google/callback', async (req, res) => {
     try {
         const { tokens } = await oauth2Client.getToken(code);
         
-        // Get user info
+        // Get user email only
         oauth2Client.setCredentials(tokens);
         const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
         const userInfo = await oauth2.userinfo.get();
         const userId = userInfo.data.id;
+        const userEmail = userInfo.data.email;
 
-        // Store tokens with user info
+        // Store only necessary information
         userSessions.set(userId, {
             tokens,
-            userInfo: userInfo.data,
+            userInfo: { email: userEmail },
             lastAccess: new Date()
         });
 
