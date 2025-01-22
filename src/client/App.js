@@ -14,56 +14,17 @@ function App() {
     const [isVoiceMode, setIsVoiceMode] = useState(false);
 
     useEffect(() => {
-        // Check URL for userId parameter
-        const urlParams = new URLSearchParams(window.location.search);
-        const userId = urlParams.get('userId');
-        
-        if (userId) {
-            // Store userId in localStorage
-            localStorage.setItem('userId', userId);
-            // Clean up URL
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-
+        // Check if user is authenticated
+        const checkAuth = async () => {
+            try {
+                const response = await axios.get(`${API_BASE_URL}/api/auth/check`);
+                setIsAuthenticated(response.data.isAuthenticated);
+            } catch (error) {
+                setIsAuthenticated(false);
+            }
+        };
         checkAuth();
     }, []);
-
-    const checkAuth = async () => {
-        const userId = localStorage.getItem('userId');
-        if (!userId) {
-            setIsAuthenticated(false);
-            return;
-        }
-
-        try {
-            const response = await axios.post(`${API_BASE_URL}/api/auth/check`, { userId });
-            setIsAuthenticated(response.data.isAuthenticated);
-            if (response.data.isAuthenticated) {
-                // Store userInfo in localStorage
-                localStorage.setItem('userInfo', JSON.stringify(response.data.userInfo));
-            } else {
-                localStorage.removeItem('userId');
-            }
-        } catch (error) {
-            setIsAuthenticated(false);
-            localStorage.removeItem('userId');
-        }
-    };
-
-    const handleLogout = async () => {
-        const userId = localStorage.getItem('userId');
-        if (userId) {
-            try {
-                await axios.post(`${API_BASE_URL}/api/auth/logout`, { userId });
-                localStorage.removeItem('userId');
-                localStorage.removeItem('userInfo');
-                setIsAuthenticated(false);
-                window.location.reload();
-            } catch (error) {
-                console.error('Logout error:', error);
-            }
-        }
-    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -71,11 +32,7 @@ function App() {
         setMessage('');
 
         try {
-            const userId = localStorage.getItem('userId');
-            const response = await axios.post(`${API_BASE_URL}/api/process-events`, { 
-                text,
-                userId 
-            });
+            const response = await axios.post(`${API_BASE_URL}/api/process-events`, { text });
             setExtractedEvents(response.data.events);
         } catch (error) {
             const errorMessage = error.response?.data?.error || 'Error processing events. Please try again.';
