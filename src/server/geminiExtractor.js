@@ -51,7 +51,7 @@ Look for phrases like "I have to", "I will", "I need to", "going to", etc.
 For each event, format EXACTLY as:
 Event Title: [Event Name]
 Date: [Date - be specific and include year if mentioned]
-Time: [Time in 12-hour format with AM/PM]
+Time: [Time in 12-hour format with AM/PM or a time range like "3pm to 8pm"]
 Details: [Any additional details, requirements, or description]
 
 Important:
@@ -85,6 +85,13 @@ Response:
 Event Title: Gym Session
 Date: tomorrow
 Time: 9:00 AM
+Details: N/A
+
+Input: "I have a meeting from 3pm to 8pm on Wednesday"
+Response:
+Event Title: Meeting
+Date: Wednesday
+Time: 3:00 PM to 8:00 PM
 Details: N/A
 
 Text to analyze:
@@ -155,22 +162,41 @@ function parseEventText(text, timezone, originalText) {
                     }
                 }
 
-                const date = parseDateTimeString(dateStr, timeStr || '12:00 PM', timezone);
+                // Handle time ranges
+                const timeRangeMatch = timeStr.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*to\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+                if (timeRangeMatch) {
+                    const startTime = timeRangeMatch[1];
+                    const endTime = timeRangeMatch[2];
+                    const startDate = parseDateTimeString(dateStr, startTime, timezone);
+                    const endDate = parseDateTimeString(dateStr, endTime, timezone);
 
-                if (date) {
-                    const isDeadline = 
-                        title.toLowerCase().includes('deadline') ||
-                        title.toLowerCase().includes('due') ||
-                        title.toLowerCase().includes('submission') ||
-                        details.toLowerCase().includes('deadline') ||
-                        details.toLowerCase().includes('due');
+                    if (startDate && endDate) {
+                        events.push({
+                            type: 'event',
+                            title,
+                            startDate,
+                            endDate,
+                            details
+                        });
+                    }
+                } else {
+                    const date = parseDateTimeString(dateStr, timeStr || '12:00 PM', timezone);
 
-                    events.push({
-                        type: isDeadline ? 'deadline' : 'event',
-                        title,
-                        date,
-                        details
-                    });
+                    if (date) {
+                        const isDeadline = 
+                            title.toLowerCase().includes('deadline') ||
+                            title.toLowerCase().includes('due') ||
+                            title.toLowerCase().includes('submission') ||
+                            details.toLowerCase().includes('deadline') ||
+                            details.toLowerCase().includes('due');
+
+                        events.push({
+                            type: isDeadline ? 'deadline' : 'event',
+                            title,
+                            date,
+                            details
+                        });
+                    }
                 }
             }
         } catch (error) {
@@ -255,12 +281,18 @@ function parseDateTimeString(dateStr, timeStr, timezone) {
 }
 
 function createCalendarEvent(event, timezone) {
-    const eventDate = event.date;
-    
-    // Create dates directly in the user's timezone without UTC conversion
-    const startDate = new Date(eventDate);
-    const endDate = new Date(startDate);
-    endDate.setHours(endDate.getHours() + (event.type === 'deadline' ? 0 : 1));
+    let startDate, endDate;
+
+    if (event.startDate && event.endDate) {
+        // Event has a time range
+        startDate = new Date(event.startDate);
+        endDate = new Date(event.endDate);
+    } else {
+        // Single time event
+        startDate = new Date(event.date);
+        endDate = new Date(startDate);
+        endDate.setHours(endDate.getHours() + (event.type === 'deadline' ? 0 : 1));
+    }
 
     // Format the dates as ISO strings but preserve the timezone
     const formatToISO = (date) => {
