@@ -6,16 +6,11 @@ require('dotenv').config();
 const { extractEventsWithGemini } = require('./geminiExtractor');
 
 const app = express();
-app.use(cors({
-    origin: process.env.NODE_ENV === 'production' 
-        ? 'https://calenderautomation.vercel.app'
-        : 'http://localhost:1234',
-    credentials: true
-}));
+app.use(cors());
 app.use(express.json());
 
-// Store tokens with user info
-const userSessions = new Map();
+// Store tokens in memory (for development)
+let storedTokens = null;
 
 const oauth2Client = new OAuth2Client(
     process.env.GOOGLE_CLIENT_ID,
@@ -30,11 +25,7 @@ const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 app.get('/api/auth/google', (req, res) => {
     const url = oauth2Client.generateAuthUrl({
         access_type: 'offline',
-        scope: [
-            'https://www.googleapis.com/auth/calendar',
-            'https://www.googleapis.com/auth/userinfo.email'
-        ],
-        prompt: 'consent'
+        scope: ['https://www.googleapis.com/auth/calendar']
     });
     res.json({ url });
 });
@@ -44,33 +35,26 @@ app.get('/api/auth/google/callback', async (req, res) => {
     const { code } = req.query;
     try {
         const { tokens } = await oauth2Client.getToken(code);
-        
-        // Get user email only
+        storedTokens = tokens; // Store tokens
         oauth2Client.setCredentials(tokens);
-        const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
-        const userInfo = await oauth2.userinfo.get();
-        const userId = userInfo.data.id;
-        const userEmail = userInfo.data.email;
-
-        // Store only necessary information
-        userSessions.set(userId, {
-            tokens,
-            userInfo: { email: userEmail },
-            lastAccess: new Date()
-        });
-
         const redirectUrl = process.env.NODE_ENV === 'production' 
-            ? `https://calenderautomation.vercel.app?userId=${userId}`
-            : `http://localhost:1234?userId=${userId}`;
-        
+            ? 'https://calenderautomation.vercel.app'
+            : 'http://localhost:1234';
         res.redirect(redirectUrl);
     } catch (error) {
-        console.error('Error in OAuth callback:', error);
-        const errorMessage = error.response?.data?.error || error.message;
-        const redirectUrl = process.env.NODE_ENV === 'production' 
-            ? `https://calenderautomation.vercel.app?error=${encodeURIComponent(errorMessage)}`
-            : `http://localhost:1234?error=${encodeURIComponent(errorMessage)}`;
-        res.redirect(redirectUrl);
+        console.error('Error getting tokens:', error);
+        res.status(500).json({ error: 'Failed to get tokens' });
+    }
+});
+
+// Update auth check endpoint
+app.get('/api/auth/check', (req, res) => {
+    try {
+        res.json({ 
+            isAuthenticated: Boolean(storedTokens && storedTokens.access_token)
+        });
+    } catch (error) {
+        res.json({ isAuthenticated: false });
     }
 });
 
@@ -144,28 +128,6 @@ app.post('/api/auth/logout', (req, res) => {
         res.json({ success: true });
     } else {
         res.status(400).json({ error: 'Invalid session' });
-    }
-});
-
-// Update auth check endpoint
-app.post('/api/auth/check', async (req, res) => {
-    const { userId } = req.body;
-    try {
-        const userSession = userSessions.get(userId);
-        if (userSession) {
-            // Update last access time
-            userSession.lastAccess = new Date();
-            userSessions.set(userId, userSession);
-
-            res.json({ 
-                isAuthenticated: true,
-                userInfo: userSession.userInfo
-            });
-        } else {
-            res.json({ isAuthenticated: false });
-        }
-    } catch (error) {
-        res.json({ isAuthenticated: false });
     }
 });
 
