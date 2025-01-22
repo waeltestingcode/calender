@@ -142,13 +142,8 @@ function App() {
                 
                 {isAuthenticated && userInfo && (
                     <div className="user-profile">
-                        <img 
-                            src={userInfo.picture} 
-                            alt={userInfo.name}
-                            className="user-avatar"
-                        />
                         <div className="user-info">
-                            <span className="user-name">{userInfo.name}</span>
+                            <span className="user-email">{userInfo.email}</span>
                             <button 
                                 className="logout-button"
                                 onClick={handleLogout}
