@@ -6,7 +6,14 @@ require('dotenv').config();
 const { extractEventsWithGemini } = require('./geminiExtractor');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+    origin: process.env.NODE_ENV === 'production' 
+        ? 'chrome-extension://*'
+        : '*',
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+}));
 app.use(express.json());
 
 // Store tokens in memory (for development)
