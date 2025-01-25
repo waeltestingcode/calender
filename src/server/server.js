@@ -7,9 +7,7 @@ const { extractEventsWithGemini } = require('./geminiExtractor');
 
 const app = express();
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' 
-        ? 'chrome-extension://*'
-        : '*',
+    origin: '*',  // Allow all origins for now
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
@@ -62,34 +60,33 @@ app.get('/', (req, res) => {
     res.redirect(redirectUrl);
 });
 
-// Add this function to get user's timezone with fallback
-async function getUserTimeZone(calendar) {
-    try {
-        if (storedTokens) {
-            oauth2Client.setCredentials(storedTokens);
-        }
-        const settings = await calendar.settings.get({
-            setting: 'timezone'
-        });
-        return settings.data.value;
-    } catch (error) {
-        console.warn('Error getting user timezone:', error);
-        return 'UTC'; // Default to UTC if we can't get user's timezone
-    }
-}
-
 // Endpoint to process text and create events
 app.post('/api/process-events', async (req, res) => {
-    const { text } = req.body;
     try {
-        if (!storedTokens) {
-            return res.status(401).json({ error: 'Not authenticated. Please sign in again.' });
+        const authHeader = req.headers.authorization;
+        if (!authHeader) {
+            return res.status(401).json({ error: 'No authorization header' });
         }
 
-        oauth2Client.setCredentials(storedTokens);
+        const token = authHeader.split(' ')[1];
+        if (!token) {
+            return res.status(401).json({ error: 'No token provided' });
+        }
+
+        // Create a new OAuth2Client with the token
+        const oauth2Client = new OAuth2Client();
+        oauth2Client.setCredentials({ access_token: token });
+
+        // Get user timezone
+        const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
         const userTimeZone = await getUserTimeZone(calendar);
         console.log('User timezone:', userTimeZone);
-        
+
+        const { text } = req.body;
+        if (!text) {
+            return res.status(400).json({ error: 'No text provided' });
+        }
+
         const events = await extractEventsWithGemini(text, userTimeZone);
         
         if (!events || events.length === 0) {
@@ -98,20 +95,13 @@ app.post('/api/process-events', async (req, res) => {
             });
         }
 
-        // Return the events without creating them
         res.json({ success: true, events: events });
     } catch (error) {
         console.error('Error processing events:', error);
-        if (error.message.includes('No access')) {
-            res.status(401).json({ 
-                error: 'Authentication expired. Please sign in again.'
-            });
-        } else {
-            res.status(500).json({ 
-                error: 'Failed to process events',
-                details: error.message 
-            });
-        }
+        res.status(500).json({ 
+            error: 'Failed to process events',
+            details: error.message 
+        });
     }
 });
 
@@ -126,16 +116,26 @@ app.get('/api/auth/check', (req, res) => {
     }
 });
 
-// Add this new endpoint
+// Update create-events endpoint
 app.post('/api/create-events', async (req, res) => {
-    const { events } = req.body;
     try {
-        if (!storedTokens) {
-            return res.status(401).json({ error: 'Not authenticated. Please sign in again.' });
+        const authHeader = req.headers.authorization;
+        if (!authHeader) {
+            return res.status(401).json({ error: 'No authorization header' });
         }
 
-        oauth2Client.setCredentials(storedTokens);
+        const token = authHeader.split(' ')[1];
+        if (!token) {
+            return res.status(401).json({ error: 'No token provided' });
+        }
+
+        // Create a new OAuth2Client with the token
+        const oauth2Client = new OAuth2Client();
+        oauth2Client.setCredentials({ access_token: token });
         
+        const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+        const { events } = req.body;
+
         const createdEvents = await Promise.all(
             events.map(event => 
                 calendar.events.insert({
@@ -154,6 +154,19 @@ app.post('/api/create-events', async (req, res) => {
         });
     }
 });
+
+// Add this function to get user's timezone with fallback
+async function getUserTimeZone(calendar) {
+    try {
+        const settings = await calendar.settings.get({
+            setting: 'timezone'
+        });
+        return settings.data.value;
+    } catch (error) {
+        console.warn('Error getting user timezone:', error);
+        return 'UTC'; // Default to UTC if we can't get user's timezone
+    }
+}
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
